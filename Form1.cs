@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace TicTacToeClient
@@ -10,9 +11,9 @@ namespace TicTacToeClient
         private TcpClient client;
         private NetworkStream stream;
 
-        private char currentPlayer = 'X'; 
-        private char[,] gameBoard = new char[3, 3]; 
-        private bool gameActive = true; 
+        private char currentPlayer = 'X';
+        private char[,] gameBoard = new char[3, 3];
+        private bool gameActive = true;
         private string gameMode = "";
         private System.Windows.Forms.Button btnRestart;
         private System.Windows.Forms.Button btnDraw;
@@ -20,45 +21,70 @@ namespace TicTacToeClient
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel;
         private System.Windows.Forms.Label lblStatus;
         private System.Windows.Forms.ComboBox cmbGameMode;
+
         public MainForm()
         {
             InitializeComponent();
+            _ = ConnectToServerAsync(); 
         }
 
-        private void ConnectButton_Click(object sender, EventArgs e)
+        private async Task ConnectToServerAsync()
         {
-            client = new TcpClient("127.0.0.1", 5500);
-            stream = client.GetStream();
-            SendGameMode();
-            WaitForGameStart();
+            try
+            {
+                client = new TcpClient();
+                await client.ConnectAsync("127.0.0.1", 5500); 
+                if (client.Connected)
+                {
+                    stream = client.GetStream();
+                    MessageBox.Show("Успешное подключение к серверу!");
+                    SendGameMode();
+                    await WaitForGameStartAsync();
+                }
+                else
+                {
+                    MessageBox.Show("Не удалось подключиться к серверу.");
+                }
+            }
+            catch (SocketException)
+            {
+                MessageBox.Show("Не удалось подключиться к серверу. Проверьте, что сервер запущен и доступен.",
+                                "Ошибка подключения",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+            }
         }
 
         private void SendGameMode()
         {
-            string selectedMode = cmbGameMode.SelectedItem.ToString();
-            byte[] data = Encoding.UTF8.GetBytes(selectedMode);
-            stream.Write(data, 0, data.Length);
+            string selectedMode = cmbGameMode.SelectedItem?.ToString();
+            if (!string.IsNullOrEmpty(selectedMode))
+            {
+                byte[] data = Encoding.UTF8.GetBytes(selectedMode);
+                stream.Write(data, 0, data.Length);
+            }
         }
-        private void WaitForGameStart()
+
+        private async Task WaitForGameStartAsync()
         {
             byte[] buffer = new byte[1024];
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
             gameMode = Encoding.UTF8.GetString(buffer, 0, bytesRead);
             MessageBox.Show($"Игра в режиме: {gameMode}");
-            gameActive = true; 
+            gameActive = true;
         }
 
         private void SendMove(int x, int y)
         {
             byte[] data = new byte[2] { (byte)(x + '0'), (byte)(y + '0') };
             stream.Write(data, 0, data.Length);
-            ReadBoardState();
+            _ = ReadBoardStateAsync(); 
         }
 
-        private void ReadBoardState()
+        private async Task ReadBoardStateAsync()
         {
             byte[] buffer = new byte[1024];
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length); 
             string boardState = Encoding.UTF8.GetString(buffer, 0, bytesRead);
             UpdateBoard(boardState);
         }
@@ -85,10 +111,9 @@ namespace TicTacToeClient
             client?.Close();
         }
 
-        
         private void Button_Click(object sender, EventArgs e)
         {
-            if (!gameActive) return; 
+            if (!gameActive) return;
 
             Button clickedButton = sender as Button;
 
@@ -106,12 +131,12 @@ namespace TicTacToeClient
             if (CheckGameStatus())
             {
                 lblStatus.Text = $"Игрок {currentPlayer} выиграл!";
-                gameActive = false; 
+                gameActive = false;
             }
             else if (IsBoardFull())
             {
                 lblStatus.Text = "Ничья!";
-                gameActive = false; 
+                gameActive = false;
             }
             else
             {
@@ -121,7 +146,6 @@ namespace TicTacToeClient
 
         private bool CheckGameStatus()
         {
-            // Проверка строк, столбцов и диагоналей
             for (int i = 0; i < 3; i++)
             {
                 if ((gameBoard[i, 0] == currentPlayer && gameBoard[i, 1] == currentPlayer && gameBoard[i, 2] == currentPlayer) ||
@@ -130,7 +154,6 @@ namespace TicTacToeClient
                     return true;
                 }
             }
-            // Проверка диагоналей
             if ((gameBoard[0, 0] == currentPlayer && gameBoard[1, 1] == currentPlayer && gameBoard[2, 2] == currentPlayer) ||
                 (gameBoard[0, 2] == currentPlayer && gameBoard[1, 1] == currentPlayer && gameBoard[2, 0] == currentPlayer))
             {
@@ -145,25 +168,25 @@ namespace TicTacToeClient
             {
                 for (int j = 0; j < 3; j++)
                 {
-                    if (gameBoard[i, j] == '\0') 
+                    if (gameBoard[i, j] == '\0')
                         return false;
                 }
             }
-            return true; 
+            return true;
         }
 
         private void BtnRestart_Click(object sender, EventArgs e)
         {
             currentPlayer = 'X';
             gameActive = true;
-            gameBoard = new char[3, 3]; 
-            lblStatus.Text = ""; 
+            gameBoard = new char[3, 3];
+            lblStatus.Text = "";
 
             foreach (Control control in tableLayoutPanel.Controls)
             {
                 if (control is Button button)
                 {
-                    button.Text = ""; 
+                    button.Text = "";
                 }
             }
         }
@@ -173,7 +196,7 @@ namespace TicTacToeClient
             if (gameActive)
             {
                 lblStatus.Text = "Игра завершена. Предложена ничья.";
-                gameActive = false; 
+                gameActive = false;
             }
             else
             {
@@ -186,14 +209,12 @@ namespace TicTacToeClient
             if (gameActive)
             {
                 lblStatus.Text = $"Игрок {currentPlayer} признал поражение. Победитель: {(currentPlayer == 'X' ? 'O' : 'X')}";
-                gameActive = false; 
+                gameActive = false;
             }
             else
             {
                 MessageBox.Show("Игра уже завершена!", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
-
     }
-
 }
