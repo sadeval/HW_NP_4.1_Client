@@ -44,6 +44,7 @@ namespace TicTacToeClient
                 else
                 {
                     MessageBox.Show("Не удалось подключиться к серверу.");
+                    Close(); 
                 }
             }
             catch (SocketException)
@@ -52,6 +53,7 @@ namespace TicTacToeClient
                                 "Ошибка подключения",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
+                Close(); 
             }
         }
 
@@ -68,7 +70,7 @@ namespace TicTacToeClient
         private async Task WaitForGameStartAsync()
         {
             byte[] buffer = new byte[1024];
-            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length); 
             gameMode = Encoding.UTF8.GetString(buffer, 0, bytesRead);
             MessageBox.Show($"Игра в режиме: {gameMode}");
             gameActive = true;
